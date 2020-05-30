@@ -12,7 +12,7 @@ cxxopts::Options options("NeuroSim", "This is description.");
 enum DeviceType {Device_Ideal, Device_Real, Device_Measured, Device_SRAM, Device_DigitalNVM};
 static std::map<std::string, DeviceType> DeviceTypeMap;
 
-auto initialize_options(int argc, char** argv){
+cxxopts::ParseResult initialize_options(int argc, char** argv){
     options.add_options()
             ("help", "Help")
             ("trfp", "Training File Patch", cxxopts::value<std::string>()->default_value("patch60000_train.txt"))

@@ -7,7 +7,7 @@ ALLOBJ := $(ALLSRC:.cpp=.o)
 OBJ := $(SRC:.cpp=.o)
 
 CXX := g++
-CXXFLAGS := -fopenmp -O3 -std=c++14 -w
+CXXFLAGS := -fopenmp -O3 -std=c++0x -w
 
 .PHONY: all clean
 all: $(MAINS:.cpp=)
