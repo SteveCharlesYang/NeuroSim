@@ -40,6 +40,7 @@
 #define ARRAY_H_
 
 #include <cstdlib>
+#include "lib/cxxopts.hpp"
 #include "Cell.h"
 
 class Array {
@@ -77,7 +78,7 @@ public:
 	}
 
 	template <class memoryType>
-	void Initialization(int numCellPerSynapse=1,bool refColumn = false) { // default value is 1
+	void Initialization(int numCellPerSynapse=1,bool refColumn = false, cxxopts::ParseResult options = 0, int devType = 0) { // default value is 1
 		/* Determine number of cells per synapse (SRAM and DigitalNVM) */
 		this->numCellPerSynapse = numCellPerSynapse;
 
@@ -91,7 +92,7 @@ public:
 		for (int col=0; col<cellsPerRow; col++) {
 			cell[col] = new Cell*[arrayRowSize];
 			for (int row=0; row<arrayRowSize; row++) {
-				cell[col][row] = new memoryType(col, row);
+				cell[col][row] = new memoryType(col, row, options, devType);
 			}
 		}
         // initialize the conductance of the reference column

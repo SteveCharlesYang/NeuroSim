@@ -41,6 +41,7 @@
 
 #include <random>
 #include <vector>
+#include "lib/cxxopts.hpp"
 
 class Cell {
 public:
@@ -94,7 +95,7 @@ public:
 
 class SRAM: public Cell {
 public:
-	SRAM(int x, int y);
+	SRAM(int x, int y, cxxopts::ParseResult options, int devType);
 	int bit;	// Stored bit (1 or 0) (dynamic variable)
 	int bitPrev;	// Previous bit
 	double widthSRAMCellNMOS;	// Pull-down NMOS width in terms offeature size (F)
@@ -147,7 +148,7 @@ public:
 
 class DigitalNVM: public eNVM {
 public:
-	DigitalNVM(int x, int y);
+	DigitalNVM(int x, int y, cxxopts::ParseResult options, int devType);
 	int bit;	// Stored bit (1 or 0) (dynamic variable), for internel check only and not be used for read
 	int bitPrev;	// Previous bit
 	double refCurrent;	// Reference current for S/A
@@ -160,7 +161,7 @@ public:
 
 class IdealDevice: public AnalogNVM {
 public:
-	IdealDevice(int x, int y);
+	IdealDevice(int x, int y, cxxopts::ParseResult options, int devType);
 	double Read(double voltage);	// Return read current (A)
 	void Write(double deltaWeightNormalized, double weight, double minWeight, double maxWeight);
 };
@@ -178,7 +179,7 @@ public:
 	double sigmaDtoD;	// Sigma of device-to-device variation on weight update nonliearity baseline
 	double sigmaCtoC;	// Sigma of cycle-to-cycle variation on weight update
 
-	RealDevice(int x, int y);
+	RealDevice(int x, int y, cxxopts::ParseResult options, int devType);
 	double Read(double voltage);	// Return read current (A)
 	void Write(double deltaWeightNormalized, double weight, double minWeight, double maxWeight);
 };
@@ -191,7 +192,7 @@ public:
 	std::vector<double> dataConductanceLTP;	// LTP conductance data at different pulse number
 	std::vector<double> dataConductanceLTD;	// LTD conductance data at different pulse number
 
-	MeasuredDevice(int x, int y);
+	MeasuredDevice(int x, int y, cxxopts::ParseResult options, int devType);
 	double Read(double voltage);	// Return read current (A)
 	void Write(double deltaWeightNormalized, double weight, double minWeight, double maxWeight);
 };

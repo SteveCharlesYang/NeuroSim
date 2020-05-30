@@ -39,6 +39,7 @@
 #include <ctime>
 #include <iostream>
 #include <math.h>
+#include "lib/cxxopts.hpp"
 #include "formula.h"
 #include "Array.h"
 #include "Cell.h"
@@ -153,46 +154,45 @@ void AnalogNVM::WriteEnergyCalculation(double wireCapCol) {
 }
 
 /* Ideal device (no weight update nonlinearity) */
-IdealDevice::IdealDevice(int x, int y) {
+IdealDevice::IdealDevice(int x, int y, cxxopts::ParseResult options, int devType) {
 	this->x = x; this->y = y;	// Cell location: x (column) and y (row) start from index 0
-	maxConductance = 5e-6;		// Maximum cell conductance (S)
-	minConductance = 100e-9;	    // Minimum cell conductance (S)
+	maxConductance = devType ? options["IHDevMaxConductance"].as<double>() : options["HODevMaxConductance"].as<double>();		// Maximum cell conductance (S)
+	minConductance = devType ? options["IHDevMinConductance"].as<double>() : options["HODevMinConductance"].as<double>();	    // Minimum cell conductance (S)
 	avgMaxConductance = maxConductance; // Average maximum cell conductance (S)
 	avgMinConductance = minConductance; // Average minimum cell conductance (S)
 	conductance = minConductance;	// Current conductance (S) (dynamic variable)
 	conductancePrev = conductance;	// Previous conductance (S) (dynamic variable)
-	readVoltage = 0.5;	// On-chip read voltage (Vr) (V)
-	readPulseWidth = 5e-9;	// Read pulse width (s) (will be determined by ADC)
-	writeVoltageLTP = 2;	// Write voltage (V) for LTP or weight increase
-	writeVoltageLTD = 2;	// Write voltage (V) for LTD or weight decrease
-	writePulseWidthLTP = 10e-9;	// Write pulse width (s) for LTP or weight increase
-	writePulseWidthLTD = 10e-9;	// Write pulse width (s) for LTD or weight decrease
-	writeEnergy = 0;	// Dynamic variable for calculation of write energy (J)
-	maxNumLevelLTP = 63;	// Maximum number of conductance states during LTP or weight increase
-	maxNumLevelLTD = 63;	// Maximum number of conductance states during LTD or weight decrease
-	numPulse = 0;	// Number of write pulses used in the most recent write operation (dynamic variable)
-	cmosAccess = true;	// True: Pseudo-crossbar (1T1R), false: cross-point
-	FeFET = false;		// True: FeFET structure (Pseudo-crossbar only, should be cmosAccess=1)
-	gateCapFeFET = 2.1717e-18;	// Gate capacitance of FeFET (F)
-	resistanceAccess = 15e3;	// The resistance of transistor (Ohm) in Pseudo-crossbar array when turned ON
-	nonlinearIV = false;	// Consider I-V nonlinearity or not (Currently for cross-point array only)
-	nonIdenticalPulse = false;	// Use non-identical pulse scheme in weight update or not (should be false here)
+	readVoltage = devType ? options["IHDevReadVoltage"].as<double>() : options["HODevReadVoltage"].as<double>();	// On-chip read voltage (Vr) (V)
+	readPulseWidth = devType ? options["IHDevReadPulseWidth"].as<double>() : options["HODevReadPulseWidth"].as<double>();	// Read pulse width (s) (will be determined by ADC)
+	writeVoltageLTP = devType ? options["IHDevWriteVoltageLTP"].as<double>() : options["HODevWriteVoltageLTP"].as<double>();	// Write voltage (V) for LTP or weight increase
+	writeVoltageLTD = devType ? options["IHDevWriteVoltageLTD"].as<double>() : options["HODevWriteVoltageLTD"].as<double>();	// Write voltage (V) for LTD or weight decrease
+	writePulseWidthLTP = devType ? options["IHDevWritePulseWidthLTP"].as<double>() : options["HODevWritePulseWidthLTP"].as<double>();	// Write pulse width (s) for LTP or weight increase
+	writePulseWidthLTD = devType ? options["IHDevWritePulseWidthLTD"].as<double>() : options["HODevWritePulseWidthLTD"].as<double>();	// Write pulse width (s) for LTD or weight decrease
+	writeEnergy = devType ? options["IHDevWriteEnergy"].as<double>() : options["HODevWriteEnergy"].as<double>();	// Dynamic variable for calculation of write energy (J)
+	maxNumLevelLTP = devType ? options["IHDevMaxNumLevelLTP"].as<double>() : options["HODevMaxNumLevelLTP"].as<double>();	// Maximum number of conductance states during LTP or weight increase
+	maxNumLevelLTD = devType ? options["IHDevMaxNumLevelLTD"].as<double>() : options["HODevMaxNumLevelLTD"].as<double>();	// Maximum number of conductance states during LTD or weight decrease
+	numPulse = devType ? options["IHDevNumPulse"].as<double>() : options["HODevNumPulse"].as<double>();	// Number of write pulses used in the most recent write operation (dynamic variable)
+	cmosAccess = devType ? options["IHDevCMOSAccess"].as<bool>() : options["HODevCMOSAccess"].as<bool>();	// True: Pseudo-crossbar (1T1R), false: cross-point
+	FeFET = devType ? options["IHDevFeFET"].as<bool>() : options["HODevFeFET"].as<bool>();		// True: FeFET structure (Pseudo-crossbar only, should be cmosAccess=1)
+	gateCapFeFET = devType ? options["IHDevGateCapFeFET"].as<double>() : options["HODevGateCapFeFET"].as<double>();	// Gate capacitance of FeFET (F)
+	resistanceAccess = devType ? options["IHDevResistanceAccess"].as<double>() : options["HODevResistanceAccess"].as<double>();	// The resistance of transistor (Ohm) in Pseudo-crossbar array when turned ON
+	nonlinearIV = devType ? options["IHDevNonlinearIV"].as<bool>() : options["HODevNonlinearIV"].as<bool>();	// Consider I-V nonlinearity or not (Currently for cross-point array only)
+	nonIdenticalPulse = devType ? options["IHDevNonIdenticalPulse"].as<bool>() : options["HODevNonIdenticalPulse"].as<bool>();	// Use non-identical pulse scheme in weight update or not (should be false here)
 								// Don't care other non-identical pulse parameters
-	NL = 10;	// Nonlinearity in write scheme (the current ratio between Vw and Vw/2), assuming for the LTP side
+	NL = devType ? options["IHDevNL"].as<double>() : options["HODevNL"].as<double>();	// Nonlinearity in write scheme (the current ratio between Vw and Vw/2), assuming for the LTP side
 	if (nonlinearIV) {	// Currently for cross-point array only
 		double Vr_exp = readVoltage;  // XXX: Modify this value to Vr in the reported measurement data (can be different than readVoltage)
 		// Calculation of conductance at on-chip Vr
 		maxConductance = NonlinearConductance(maxConductance, NL, writeVoltageLTP, Vr_exp, readVoltage);
 		minConductance = NonlinearConductance(minConductance, NL, writeVoltageLTP, Vr_exp, readVoltage);
 	}
-	readNoise = false;	// Consider read noise or not
-	sigmaReadNoise = 0.25;	// Sigma of read noise in gaussian distribution
+	readNoise = devType ? options["IHDevReadNoise"].as<bool>() : options["HODevReadNoise"].as<bool>();	// Consider read noise or not
+	sigmaReadNoise = devType ? options["IHDevSigmaReadNoise"].as<double>() : options["HODevSigmaReadNoise"].as<double>();	// Sigma of read noise in gaussian distribution
 	gaussian_dist = new std::normal_distribution<double>(0, sigmaReadNoise);	// Set up mean and stddev for read noise
-	
 	/* Conductance range variation */	
-	conductanceRangeVar = false;	// Consider variation of conductance range or not
-	maxConductanceVar = 0;	// Sigma of maxConductance variation (S)
-	minConductanceVar = 0;	// Sigma of minConductance variation (S)
+	conductanceRangeVar = devType ? options["IHDevConductanceRangeVar"].as<bool>() : options["HODevConductanceRangeVar"].as<bool>();	// Consider variation of conductance range or not
+	maxConductanceVar = devType ? options["IHDevMaxConductanceVar"].as<double>() : options["HODevMaxConductanceVar"].as<double>();	// Sigma of maxConductance variation (S)
+	minConductanceVar = devType ? options["IHDevMinConductanceVar"].as<double>() : options["HODevMinConductanceVar"].as<double>();	// Sigma of minConductance variation (S)
 	std::mt19937 localGen;
 	localGen.seed(std::time(0));
 	gaussian_dist_maxConductance = new std::normal_distribution<double>(0, maxConductanceVar);
@@ -257,60 +257,60 @@ void IdealDevice::Write(double deltaWeightNormalized, double weight, double minW
 }
 
 /* Real Device */
-RealDevice::RealDevice(int x, int y) {
+RealDevice::RealDevice(int x, int y, cxxopts::ParseResult options, int devType) {
 	this->x = x; this->y = y;	// Cell location: x (column) and y (row) start from index 0
-	maxConductance = 3.8462e-8;		// Maximum cell conductance (S)
-	minConductance = 3.0769e-9;	// Minimum cell conductance (S)
-	avgMaxConductance = maxConductance; // Average maximum cell conductance (S)
-	avgMinConductance = minConductance; // Average minimum cell conductance (S)
-	conductance = minConductance;	// Current conductance (S) (dynamic variable)
-	conductancePrev = conductance;	// Previous conductance (S) (dynamic variable)
-	readVoltage = 0.5;	// On-chip read voltage (Vr) (V)
-	readPulseWidth = 5e-9;	// Read pulse width (s) (will be determined by ADC)
-	writeVoltageLTP = 3.2;	// Write voltage (V) for LTP or weight increase
-	writeVoltageLTD = 2.8;	// Write voltage (V) for LTD or weight decrease
-	writePulseWidthLTP = 300e-6;	// Write pulse width (s) for LTP or weight increase
-	writePulseWidthLTD = 300e-6;	// Write pulse width (s) for LTD or weight decrease
-	writeEnergy = 0;	// Dynamic variable for calculation of write energy (J)
-	maxNumLevelLTP = 97;	// Maximum number of conductance states during LTP or weight increase
-	maxNumLevelLTD = 100;	// Maximum number of conductance states during LTD or weight decrease
-	numPulse = 0;	// Number of write pulses used in the most recent write operation (dynamic variable)
-	cmosAccess = true;	// True: Pseudo-crossbar (1T1R), false: cross-point
-    FeFET = false;		// True: FeFET structure (Pseudo-crossbar only, should be cmosAccess=1)
-	gateCapFeFET = 2.1717e-18;	// Gate capacitance of FeFET (F)
-	resistanceAccess = 15e3;	// The resistance of transistor (Ohm) in Pseudo-crossbar array when turned ON
-	nonlinearIV = false;	// Consider I-V nonlinearity or not (Currently for cross-point array only)
-	NL = 10;    // I-V nonlinearity in write scheme (the current ratio between Vw and Vw/2), assuming for the LTP side
+    maxConductance = devType ? options["IHDevMaxConductance"].as<double>() : options["HODevMaxConductance"].as<double>();		// Maximum cell conductance (S)
+    minConductance = devType ? options["IHDevMinConductance"].as<double>() : options["HODevMinConductance"].as<double>();	    // Minimum cell conductance (S)
+    avgMaxConductance = maxConductance; // Average maximum cell conductance (S)
+    avgMinConductance = minConductance; // Average minimum cell conductance (S)
+    conductance = minConductance;	// Current conductance (S) (dynamic variable)
+    conductancePrev = conductance;	// Previous conductance (S) (dynamic variable)
+    readVoltage = devType ? options["IHDevReadVoltage"].as<double>() : options["HODevReadVoltage"].as<double>();	// On-chip read voltage (Vr) (V)
+    readPulseWidth = devType ? options["IHDevReadPulseWidth"].as<double>() : options["HODevReadPulseWidth"].as<double>();	// Read pulse width (s) (will be determined by ADC)
+    writeVoltageLTP = devType ? options["IHDevWriteVoltageLTP"].as<double>() : options["HODevWriteVoltageLTP"].as<double>();	// Write voltage (V) for LTP or weight increase
+    writeVoltageLTD = devType ? options["IHDevWriteVoltageLTD"].as<double>() : options["HODevWriteVoltageLTD"].as<double>();	// Write voltage (V) for LTD or weight decrease
+    writePulseWidthLTP = devType ? options["IHDevWritePulseWidthLTP"].as<double>() : options["HODevWritePulseWidthLTP"].as<double>();	// Write pulse width (s) for LTP or weight increase
+    writePulseWidthLTD = devType ? options["IHDevWritePulseWidthLTD"].as<double>() : options["HODevWritePulseWidthLTD"].as<double>();	// Write pulse width (s) for LTD or weight decrease
+    writeEnergy = devType ? options["IHDevWriteEnergy"].as<double>() : options["HODevWriteEnergy"].as<double>();	// Dynamic variable for calculation of write energy (J)
+    maxNumLevelLTP = devType ? options["IHDevMaxNumLevelLTP"].as<double>() : options["HODevMaxNumLevelLTP"].as<double>();	// Maximum number of conductance states during LTP or weight increase
+    maxNumLevelLTD = devType ? options["IHDevMaxNumLevelLTD"].as<double>() : options["HODevMaxNumLevelLTD"].as<double>();	// Maximum number of conductance states during LTD or weight decrease
+    numPulse = devType ? options["IHDevNumPulse"].as<double>() : options["HODevNumPulse"].as<double>();	// Number of write pulses used in the most recent write operation (dynamic variable)
+    cmosAccess = devType ? options["IHDevCMOSAccess"].as<bool>() : options["HODevCMOSAccess"].as<bool>();	// True: Pseudo-crossbar (1T1R), false: cross-point
+    FeFET = devType ? options["IHDevFeFET"].as<bool>() : options["HODevFeFET"].as<bool>();		// True: FeFET structure (Pseudo-crossbar only, should be cmosAccess=1)
+    gateCapFeFET = devType ? options["IHDevGateCapFeFET"].as<double>() : options["HODevGateCapFeFET"].as<double>();	// Gate capacitance of FeFET (F)
+    resistanceAccess = devType ? options["IHDevResistanceAccess"].as<double>() : options["HODevResistanceAccess"].as<double>();	// The resistance of transistor (Ohm) in Pseudo-crossbar array when turned ON
+    nonlinearIV = devType ? options["IHDevNonlinearIV"].as<bool>() : options["HODevNonlinearIV"].as<bool>();	// Consider I-V nonlinearity or not (Currently for cross-point array only)
+    NL = devType ? options["IHDevNL"].as<double>() : options["HODevNL"].as<double>();    // I-V nonlinearity in write scheme (the current ratio between Vw and Vw/2), assuming for the LTP side
 	if (nonlinearIV) {  // Currently for cross-point array only
 		double Vr_exp = readVoltage;  // XXX: Modify this value to Vr in the reported measurement data (can be different than readVoltage)
 		// Calculation of conductance at on-chip Vr
 		maxConductance = NonlinearConductance(maxConductance, NL, writeVoltageLTP, Vr_exp, readVoltage);
 		minConductance = NonlinearConductance(minConductance, NL, writeVoltageLTP, Vr_exp, readVoltage);
 	}
-	nonlinearWrite = true;	// Consider weight update nonlinearity or not
-	nonIdenticalPulse = false;	// Use non-identical pulse scheme in weight update or not
+	nonlinearWrite = devType ? options["IHDevNonlinearWrite"].as<bool>() : options["HODevNonlinearWrite"].as<bool>();	// Consider weight update nonlinearity or not
+    nonIdenticalPulse = devType ? options["IHDevNonIdenticalPulse"].as<bool>() : options["HODevNonIdenticalPulse"].as<bool>();	// Use non-identical pulse scheme in weight update or not
 	if (nonIdenticalPulse) {
-		VinitLTP = 2.85;	// Initial write voltage for LTP or weight increase (V)
-		VstepLTP = 0.05;	// Write voltage step for LTP or weight increase (V)
-		VinitLTD = 2.1;		// Initial write voltage for LTD or weight decrease (V)
-		VstepLTD = 0.05; 	// Write voltage step for LTD or weight decrease (V)
-		PWinitLTP = 75e-9;	// Initial write pulse width for LTP or weight increase (s)
-		PWstepLTP = 5e-9;	// Write pulse width for LTP or weight increase (s)
-		PWinitLTD = 75e-9;	// Initial write pulse width for LTD or weight decrease (s)
-		PWstepLTD = 5e-9;	// Write pulse width for LTD or weight decrease (s)
-		writeVoltageSquareSum = 0;	// Sum of V^2 of non-identical pulses (dynamic variable)
+		VinitLTP = devType ? options["IHDevVinitLTP"].as<double>() : options["HODevVinitLTP"].as<double>();	// Initial write voltage for LTP or weight increase (V)
+		VstepLTP = devType ? options["IHDevVstepLTP"].as<double>() : options["HODevVstepLTP"].as<double>();	// Write voltage step for LTP or weight increase (V)
+		VinitLTD = devType ? options["IHDevVinitLTD"].as<double>() : options["HODevVinitLTD"].as<double>();		// Initial write voltage for LTD or weight decrease (V)
+		VstepLTD = devType ? options["IHDevVstepLTD"].as<double>() : options["HODevVstepLTD"].as<double>(); 	// Write voltage step for LTD or weight decrease (V)
+		PWinitLTP = devType ? options["IHDevPWinitLTP"].as<double>() : options["HODevPWinitLTP"].as<double>();	// Initial write pulse width for LTP or weight increase (s)
+		PWstepLTP = devType ? options["IHDevPWstepLTP"].as<double>() : options["HODevPWstepLTP"].as<double>();	// Write pulse width for LTP or weight increase (s)
+		PWinitLTD = devType ? options["IHDevPWinitLTD"].as<double>() : options["HODevPWinitLTD"].as<double>();	// Initial write pulse width for LTD or weight decrease (s)
+		PWstepLTD = devType ? options["IHDevPWstepLTD"].as<double>() : options["HODevPWstepLTD"].as<double>();	// Write pulse width for LTD or weight decrease (s)
+		writeVoltageSquareSum = devType ? options["IHDevWriteVoltageSquareSum"].as<double>() : options["HODevWriteVoltageSquareSum"].as<double>();	// Sum of V^2 of non-identical pulses (dynamic variable)
 	}
-	readNoise = false;		// Consider read noise or not
-	sigmaReadNoise = 0;		// Sigma of read noise in gaussian distribution
+	readNoise = devType ? options["IHDevReadNoise"].as<bool>() : options["HODevReadNoise"].as<bool>();		// Consider read noise or not
+	sigmaReadNoise = devType ? options["IHDevSigmaReadNoise"].as<double>() : options["HODevSigmaReadNoise"].as<double>();		// Sigma of read noise in gaussian distribution
 	gaussian_dist = new std::normal_distribution<double>(0, sigmaReadNoise);	// Set up mean and stddev for read noise
 
 	std::mt19937 localGen;	// It's OK not to use the external gen, since here the device-to-device vairation is a one-time deal
 	localGen.seed(std::time(0));
 	
 	/* Device-to-device weight update variation */
-	NL_LTP = 2.4;	// LTP nonlinearity
-	NL_LTD = -4.88;	// LTD nonlinearity
-	sigmaDtoD = 0;	// Sigma of device-to-device weight update vairation in gaussian distribution
+	NL_LTP = devType ? options["IHDevNLLTP"].as<double>() : options["HODevNLLTP"].as<double>();	// LTP nonlinearity
+	NL_LTD = devType ? options["IHDevNLLTD"].as<double>() : options["HODevNLLTD"].as<double>();	// LTD nonlinearity
+	sigmaDtoD = devType ? options["IHDevSigmaDtoD"].as<double>() : options["HODevSigmaDtoD"].as<double>();	// Sigma of device-to-device weight update vairation in gaussian distribution
 	gaussian_dist2 = new std::normal_distribution<double>(0, sigmaDtoD);	// Set up mean and stddev for device-to-device weight update vairation
 	paramALTP = getParamA(NL_LTP + (*gaussian_dist2)(localGen)) * maxNumLevelLTP;	// Parameter A for LTP nonlinearity
 	paramALTD = getParamA(NL_LTD + (*gaussian_dist2)(localGen)) * maxNumLevelLTD;	// Parameter A for LTD nonlinearity
@@ -320,9 +320,9 @@ RealDevice::RealDevice(int x, int y) {
 	gaussian_dist3 = new std::normal_distribution<double>(0, sigmaCtoC);    // Set up mean and stddev for cycle-to-cycle weight update vairation
 
 	/* Conductance range variation */
-	conductanceRangeVar = false;    // Consider variation of conductance range or not
-	maxConductanceVar = 0;  // Sigma of maxConductance variation (S)
-	minConductanceVar = 0;  // Sigma of minConductance variation (S)
+	conductanceRangeVar = devType ? options["IHDevConductanceRangeVar"].as<bool>() : options["HODevConductanceRangeVar"].as<bool>();    // Consider variation of conductance range or not
+	maxConductanceVar = devType ? options["IHDevMaxConductanceVar"].as<double>() : options["HODevMaxConductanceVar"].as<double>();  // Sigma of maxConductance variation (S)
+	minConductanceVar = devType ? options["IHDevMinConductanceVar"].as<double>() : options["HODevMinConductanceVar"].as<double>(); // Sigma of minConductance variation (S)
 	gaussian_dist_maxConductance = new std::normal_distribution<double>(0, maxConductanceVar);
 	gaussian_dist_minConductance = new std::normal_distribution<double>(0, minConductanceVar);
 	if (conductanceRangeVar) {
@@ -440,39 +440,39 @@ void RealDevice::Write(double deltaWeightNormalized, double weight, double minWe
 }
 
 /* Measured device */
-MeasuredDevice::MeasuredDevice(int x, int y) {
+MeasuredDevice::MeasuredDevice(int x, int y, cxxopts::ParseResult options, int devType) {
 	this->x = x; this->y = y;	// Cell location: x (column) and y (row) start from index 0
-	readVoltage = 0.5;	// On-chip read voltage (Vr) (V)
-	readPulseWidth = 5e-9;	// Read pulse width (s) (will be determined by ADC)
-	writeVoltageLTP = 2;	// Write voltage (V) for LTP or weight increase
-	writeVoltageLTD = 2;	// Write voltage (V) for LTD or weight decrease
-	writePulseWidthLTP = 100e-9;	// Write pulse width (s) for LTP or weight increase
-	writePulseWidthLTD = 100e-9;	// Write pulse width (s) for LTD or weight decrease
-	writeEnergy = 0;	// Dynamic variable for calculation of write energy (J)
-	numPulse = 0;	// Number of write pulses used in the most recent write operation (dynamic variable)
-	cmosAccess = true;	// True: Pseudo-crossbar (1T1R), false: cross-point
-	FeFET = false;		// True: FeFET structure (Pseudo-crossbar only, should be cmosAccess=1)
-	gateCapFeFET = 2.1717e-18;	// Gate capacitance of FeFET (F)
-	resistanceAccess = 15e3;	// The resistance of transistor (Ohm) in Pseudo-crossbar array when turned ON
-	nonlinearIV = false;	// Currently for cross-point array only
-	nonlinearWrite = false;	// Consider weight update nonlinearity or not
-	nonIdenticalPulse = false;	// Use non-identical pulse scheme in weight update or not
-	if (nonIdenticalPulse) {
-		VinitLTP = 2.85;    // Initial write voltage for LTP or weight increase (V)
-		VstepLTP = 0.05;    // Write voltage step for LTP or weight increase (V)
-		VinitLTD = 2.1;     // Initial write voltage for LTD or weight decrease (V)
-		VstepLTD = 0.05;    // Write voltage step for LTD or weight decrease (V)
-		PWinitLTP = 75e-9;  // Initial write pulse width for LTP or weight increase (s)
-		PWstepLTP = 5e-9;   // Write pulse width for LTP or weight increase (s)
-		PWinitLTD = 75e-9;  // Initial write pulse width for LTD or weight decrease (s)
-		PWstepLTD = 5e-9;   // Write pulse width for LTD or weight decrease (s)
-		writeVoltageSquareSum = 0;  // Sum of V^2 of non-identical pulses (dynamic variable)
+    readVoltage = devType ? options["IHDevReadVoltage"].as<double>() : options["HODevReadVoltage"].as<double>();	// On-chip read voltage (Vr) (V)
+    readPulseWidth = devType ? options["IHDevReadPulseWidth"].as<double>() : options["HODevReadPulseWidth"].as<double>();	// Read pulse width (s) (will be determined by ADC)
+    writeVoltageLTP = devType ? options["IHDevWriteVoltageLTP"].as<double>() : options["HODevWriteVoltageLTP"].as<double>();	// Write voltage (V) for LTP or weight increase
+    writeVoltageLTD = devType ? options["IHDevWriteVoltageLTD"].as<double>() : options["HODevWriteVoltageLTD"].as<double>();	// Write voltage (V) for LTD or weight decrease
+    writePulseWidthLTP = devType ? options["IHDevWritePulseWidthLTP"].as<double>() : options["HODevWritePulseWidthLTP"].as<double>();	// Write pulse width (s) for LTP or weight increase
+    writePulseWidthLTD = devType ? options["IHDevWritePulseWidthLTD"].as<double>() : options["HODevWritePulseWidthLTD"].as<double>();	// Write pulse width (s) for LTD or weight decrease
+    writeEnergy = devType ? options["IHDevWriteEnergy"].as<double>() : options["HODevWriteEnergy"].as<double>();	// Dynamic variable for calculation of write energy (J)
+    numPulse = devType ? options["IHDevNumPulse"].as<double>() : options["HODevNumPulse"].as<double>();	// Number of write pulses used in the most recent write operation (dynamic variable)
+    cmosAccess = devType ? options["IHDevCMOSAccess"].as<bool>() : options["HODevCMOSAccess"].as<bool>();	// True: Pseudo-crossbar (1T1R), false: cross-point
+    FeFET = devType ? options["IHDevFeFET"].as<bool>() : options["HODevFeFET"].as<bool>();		// True: FeFET structure (Pseudo-crossbar only, should be cmosAccess=1)
+    gateCapFeFET = devType ? options["IHDevGateCapFeFET"].as<double>() : options["HODevGateCapFeFET"].as<double>();	// Gate capacitance of FeFET (F)
+    resistanceAccess = devType ? options["IHDevResistanceAccess"].as<double>() : options["HODevResistanceAccess"].as<double>();	// The resistance of transistor (Ohm) in Pseudo-crossbar array when turned ON
+    nonlinearIV = devType ? options["IHDevNonlinearIV"].as<bool>() : options["HODevNonlinearIV"].as<bool>();	// Currently for cross-point array only
+    nonlinearWrite = devType ? options["IHDevNonlinearWrite"].as<bool>() : options["HODevNonlinearWrite"].as<bool>();	// Consider weight update nonlinearity or not
+    nonIdenticalPulse = devType ? options["IHDevNonIdenticalPulse"].as<bool>() : options["HODevNonIdenticalPulse"].as<bool>();	// Use non-identical pulse scheme in weight update or not
+    if (nonIdenticalPulse) {
+        VinitLTP = devType ? options["IHDevVinitLTP"].as<double>() : options["HODevVinitLTP"].as<double>();	// Initial write voltage for LTP or weight increase (V)
+        VstepLTP = devType ? options["IHDevVstepLTP"].as<double>() : options["HODevVstepLTP"].as<double>();	// Write voltage step for LTP or weight increase (V)
+        VinitLTD = devType ? options["IHDevVinitLTD"].as<double>() : options["HODevVinitLTD"].as<double>();		// Initial write voltage for LTD or weight decrease (V)
+        VstepLTD = devType ? options["IHDevVstepLTD"].as<double>() : options["HODevVstepLTD"].as<double>(); 	// Write voltage step for LTD or weight decrease (V)
+        PWinitLTP = devType ? options["IHDevPWinitLTP"].as<double>() : options["HODevPWinitLTP"].as<double>();	// Initial write pulse width for LTP or weight increase (s)
+        PWstepLTP = devType ? options["IHDevPWstepLTP"].as<double>() : options["HODevPWstepLTP"].as<double>();	// Write pulse width for LTP or weight increase (s)
+        PWinitLTD = devType ? options["IHDevPWinitLTD"].as<double>() : options["HODevPWinitLTD"].as<double>();	// Initial write pulse width for LTD or weight decrease (s)
+        PWstepLTD = devType ? options["IHDevPWstepLTD"].as<double>() : options["HODevPWstepLTD"].as<double>();	// Write pulse width for LTD or weight decrease (s)
+        writeVoltageSquareSum = devType ? options["IHDevWriteVoltageSquareSum"].as<double>() : options["HODevWriteVoltageSquareSum"].as<double>();	// Sum of V^2 of non-identical pulses (dynamic variable)
 	}
-	readNoise = false;		// Consider read noise or not
-	sigmaReadNoise = 0.0289;	// Sigma of read noise in gaussian distribution
-	NL = 10;	// Nonlinearity in write scheme (the current ratio between Vw and Vw/2), assuming for the LTP side
+    readNoise = devType ? options["IHDevReadNoise"].as<bool>() : options["HODevReadNoise"].as<bool>();		// Consider read noise or not
+    sigmaReadNoise = devType ? options["IHDevSigmaReadNoise"].as<double>() : options["HODevSigmaReadNoise"].as<double>();	// Sigma of read noise in gaussian distribution
+    NL = devType ? options["IHDevNL"].as<double>() : options["HODevNL"].as<double>();	// Nonlinearity in write scheme (the current ratio between Vw and Vw/2), assuming for the LTP side
 	gaussian_dist = new std::normal_distribution<double>(0, sigmaReadNoise);    // Set up mean and stddev for read noise
-	symLTPandLTD = false;	// True: use LTP conductance data for LTD
+	symLTPandLTD = devType ? options["IHDevSymLTPandLTD"].as<bool>() : options["HODevSymLTPandLTD"].as<bool>();		// True: use LTP conductance data for LTD
 
 	/* LTP */
 	double rawDataConductanceLTP[] = {0,1.00e-09,2.00e-09,3.00e-09,4.00e-09,5.00e-09,6.00e-09,7.00e-09,8.00e-09,9.00e-09,1.00e-08,1.10e-08,1.20e-08,1.30e-08,1.40e-08,1.50e-08,1.60e-08,1.70e-08,1.80e-08,1.90e-08,2.00e-08,2.10e-08,2.20e-08,2.30e-08,2.40e-08,2.50e-08,2.60e-08,2.70e-08,2.80e-08,2.90e-08,3.00e-08,3.10e-08,3.20e-08,3.30e-08,3.40e-08,3.50e-08,3.60e-08,3.70e-08,3.80e-08,3.90e-08,4.00e-08,4.10e-08,4.20e-08,4.30e-08,4.40e-08,4.50e-08,4.60e-08,4.70e-08,4.80e-08,4.90e-08,5.00e-08,5.10e-08,5.20e-08,5.30e-08,5.40e-08,5.50e-08,5.60e-08,5.70e-08,5.80e-08,5.90e-08,6.00e-08,6.10e-08,6.20e-08,6.30e-08};
@@ -611,54 +611,54 @@ void MeasuredDevice::Write(double deltaWeightNormalized, double weight, double m
 }
 
 /* SRAM */
-SRAM::SRAM(int x, int y) {
+SRAM::SRAM(int x, int y, cxxopts::ParseResult options, int devType) {
 	this->x = x; this->y = y;
-	bit = 0;	// Stored bit (1 or 0) (dynamic variable)
-	bitPrev = 0;	// Previous bit
-	heightInFeatureSize = 14.6;	// Cell height in terms of feature size (F)
-	widthInFeatureSize = 10;	// Cell width in terms of feature size (F)
-	widthSRAMCellNMOS = 2.08;	// Pull-down NMOS width in terms of feature size (F)
-	widthSRAMCellPMOS = 1.23;	// Pull-up PMOS width in terms of feature size (F)
-	widthAccessCMOS = 1.31;		// Access transistor width in terms of feature size (F)
-	minSenseVoltage = 0.1;		// Minimum voltage difference (V) for sensing
-	readEnergy = 0;				// Dynamic variable for calculation of read energy (J)
-	writeEnergy = 0;			// Dynamic variable for calculation of write energy (J)
-	readEnergySRAMCell = 0;		// Read energy (J) per SRAM cell (currently not used, it is included in the peripheral circuits of SRAM array in NeuroSim)
-	writeEnergySRAMCell = 0;	// Write energy (J) per SRAM cell (will be obtained from NeuroSim)
+	bit = devType ? options["IHDevBit"].as<int>() : options["HODevBit"].as<int>();	// Stored bit (1 or 0) (dynamic variable)
+	bitPrev = devType ? options["IHDevBitPrev"].as<int>() : options["HODevBitPrev"].as<int>();	// Previous bit
+	heightInFeatureSize = devType ? options["IHDevHeightInFeatureSize"].as<double>() : options["HODevHeightInFeatureSize"].as<double>();	// Cell height in terms of feature size (F)
+	widthInFeatureSize = devType ? options["IHDevWidthInFeatureSize"].as<double>() : options["HODevWidthInFeatureSize"].as<double>();	// Cell width in terms of feature size (F)
+	widthSRAMCellNMOS = devType ? options["IHDevWidthSRAMCellNMOS"].as<double>() : options["HODevWidthSRAMCellNMOS"].as<double>();	// Pull-down NMOS width in terms of feature size (F)
+	widthSRAMCellPMOS = devType ? options["IHDevWidthSRAMCellPMOS"].as<double>() : options["HODevWidthSRAMCellPMOS"].as<double>();	// Pull-up PMOS width in terms of feature size (F)
+	widthAccessCMOS = devType ? options["IHDevWidthAccessCMOS"].as<double>() : options["HODevWidthAccessCMOS"].as<double>();	// Access transistor width in terms of feature size (F)
+	minSenseVoltage = devType ? options["IHDevMinSenseVoltage"].as<double>() : options["HODevMinSenseVoltage"].as<double>();		// Minimum voltage difference (V) for sensing
+    readEnergy = devType ? options["IHDevReadEnergy"].as<double>() : options["HODevReadEnergy"].as<double>();				// Dynamic variable for calculation of read energy (J)
+    writeEnergy = devType ? options["IHDevWriteEnergy"].as<double>() : options["HODevWriteEnergy"].as<double>();			// Dynamic variable for calculation of write energy (J)
+	readEnergySRAMCell = devType ? options["IHDevReadEnergySRAMCell"].as<double>() : options["HODevReadEnergySRAMCell"].as<double>();		// Read energy (J) per SRAM cell (currently not used, it is included in the peripheral circuits of SRAM array in NeuroSim)
+	writeEnergySRAMCell = devType ? options["IHDevWriteEnergySRAMCell"].as<double>() : options["HODevWriteEnergySRAMCell"].as<double>();	// Write energy (J) per SRAM cell (will be obtained from NeuroSim)
 }
 
 /* Digital eNVM */
-DigitalNVM::DigitalNVM(int x, int y) {
+DigitalNVM::DigitalNVM(int x, int y, cxxopts::ParseResult options, int devType) {
 	this->x = x; this->y = y;	// Cell location: x (column) and y (row) start from index 0	
-	bit = 0;	// Stored bit (1 or 0) (dynamic variable), for internel check only and not be used for read
-	bitPrev = 0;	// Previous bit
-	maxConductance = 5e-6;		// Maximum cell conductance (S)
-	minConductance = 100e-9;	// Minimum cell conductance (S)
+    bit = devType ? options["IHDevBit"].as<int>() : options["HODevBit"].as<int>();	// Stored bit (1 or 0) (dynamic variable)
+    bitPrev = devType ? options["IHDevBitPrev"].as<int>() : options["HODevBitPrev"].as<int>();	// Previous bit
+    maxConductance = devType ? options["IHDevMaxConductance"].as<double>() : options["HODevMaxConductance"].as<double>();		// Maximum cell conductance (S)
+    minConductance = devType ? options["IHDevMinConductance"].as<double>() : options["HODevMinConductance"].as<double>();	    // Minimum cell conductance (S)
 	avgMaxConductance = maxConductance; // Average maximum cell conductance (S)
 	avgMinConductance = minConductance; // Average minimum cell conductance (S)
 	conductance = minConductance;	// Current conductance (S) (dynamic variable)
 	conductancePrev = conductance;	// Previous conductance (S) (dynamic variable)
-	readVoltage = 0.5;	// On-chip read voltage (Vr) (V)
-	readPulseWidth = 5e-9;	// Read pulse width (s) (will be determined by S/A)
-	writeVoltageLTP = 2.5;	// Write voltage (V) for LTP or weight increase
-	writeVoltageLTD = 2.5;	// Write voltage (V) for LTD or weight decrease
-	writePulseWidthLTP = 10e-9;	// Write pulse width (s) for LTP or weight increase
-	writePulseWidthLTD = 10e-9;	// Write pulse width (s) for LTD or weight decrease
-	readEnergy = 0;		// Read pulse width (s) (currently not used)
-	writeEnergy = 0;    // Dynamic variable for calculation of write energy (J)
-	cmosAccess = true;	// True: Pseudo-crossbar (1T1R), false: cross-point
-    parallelRead = false; // if it is a parallel readout scheme
-	resistanceAccess = 15e3;	// The resistance of transistor (Ohm) in Pseudo-crossbar array when turned ON
-	nonlinearIV = false;	// Consider I-V nonlinearity or not (Currently for cross-point array only)
-	NL = 10;    // Nonlinearity in write scheme (the current ratio between Vw and Vw/2), assuming for the LTP side
+    readVoltage = devType ? options["IHDevReadVoltage"].as<double>() : options["HODevReadVoltage"].as<double>();	// On-chip read voltage (Vr) (V)
+    readPulseWidth = devType ? options["IHDevReadPulseWidth"].as<double>() : options["HODevReadPulseWidth"].as<double>();	// Read pulse width (s) (will be determined by ADC)
+    writeVoltageLTP = devType ? options["IHDevWriteVoltageLTP"].as<double>() : options["HODevWriteVoltageLTP"].as<double>();	// Write voltage (V) for LTP or weight increase
+    writeVoltageLTD = devType ? options["IHDevWriteVoltageLTD"].as<double>() : options["HODevWriteVoltageLTD"].as<double>();	// Write voltage (V) for LTD or weight decrease
+    writePulseWidthLTP = devType ? options["IHDevWritePulseWidthLTP"].as<double>() : options["HODevWritePulseWidthLTP"].as<double>();	// Write pulse width (s) for LTP or weight increase
+    writePulseWidthLTD = devType ? options["IHDevWritePulseWidthLTD"].as<double>() : options["HODevWritePulseWidthLTD"].as<double>();	// Write pulse width (s) for LTD or weight decrease
+	readEnergy = devType ? options["IHDevReadEnergy"].as<double>() : options["HODevReadEnergy"].as<double>();   	// Read pulse width (s) (currently not used)
+    writeEnergy = devType ? options["IHDevWriteEnergy"].as<double>() : options["HODevWriteEnergy"].as<double>();   // Dynamic variable for calculation of write energy (J)
+    cmosAccess = devType ? options["IHDevCMOSAccess"].as<bool>() : options["HODevCMOSAccess"].as<bool>();	// True: Pseudo-crossbar (1T1R), false: cross-point
+    parallelRead = devType ? options["IHDevParallelRead"].as<bool>() : options["HODevParallelRead"].as<bool>(); // if it is a parallel readout scheme
+	resistanceAccess = devType ? options["IHDevResistanceAccess"].as<double>() : options["HODevResistanceAccess"].as<double>();	// The resistance of transistor (Ohm) in Pseudo-crossbar array when turned ON
+    nonlinearIV = devType ? options["IHDevNonlinearIV"].as<bool>() : options["HODevNonlinearIV"].as<bool>();	// Consider I-V nonlinearity or not (Currently for cross-point array only)
+    NL = devType ? options["IHDevNL"].as<double>() : options["HODevNL"].as<double>();    // Nonlinearity in write scheme (the current ratio between Vw and Vw/2), assuming for the LTP side
 	if (nonlinearIV) {  // Currently for cross-point array only
 		double Vr_exp = readVoltage;  // XXX: Modify this value to Vr in the reported measurement data (can be different than readVoltage)
 		// Calculation of conductance at on-chip Vr
 		maxConductance = NonlinearConductance(maxConductance, NL, writeVoltageLTP, Vr_exp, readVoltage);
 		minConductance = NonlinearConductance(minConductance, NL, writeVoltageLTP, Vr_exp, readVoltage);
 	}
-	readNoise = false;		// Consider read noise or not
-	sigmaReadNoise = 0.25;	// Sigma of read noise in gaussian distribution
+    readNoise = devType ? options["IHDevReadNoise"].as<bool>() : options["HODevReadNoise"].as<bool>();		// Consider read noise or not
+    sigmaReadNoise = devType ? options["IHDevSigmaReadNoise"].as<double>() : options["HODevSigmaReadNoise"].as<double>();	// Sigma of read noise in gaussian distribution
 	gaussian_dist = new std::normal_distribution<double>(0, sigmaReadNoise);    // Set up mean and stddev for read noise
   if(cmosAccess){ // the reference current for 1T1R cell, should include the resistance
       double Rmax=1/maxConductance;

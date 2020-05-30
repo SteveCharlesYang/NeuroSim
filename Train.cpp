@@ -40,7 +40,7 @@
 #include <iostream>
 #include <vector>
 #include <random>
-#include <string>
+#include <string.h>
 #include "formula.h"
 #include "Param.h"
 #include "Array.h"
@@ -114,7 +114,7 @@ double a2[param->nOutput];  // Net output of output layer [param->nOutput]
 
 double s1[param->nHide];    // Output delta from input layer to the hidden layer [param->nHide]
 double s2[param->nOutput];  // Output delta from hidden layer to the output layer [param->nOutput]
-	
+
 	for (int t = 0; t < epochs; t++) {
 		for (int batchSize = 0; batchSize < numTrain; batchSize++) {
 
@@ -424,7 +424,6 @@ double s2[param->nOutput];  // Output delta from hidden layer to the output laye
 					s1[j] += a1[j] * (1 - a1[j]) * weight2[k][j] * s2[k];
 				}
 			}
-
 			// Weight update
 			/* Update weight of the first layer (input layer to the hidden layer) */
 			if (param->useHardwareInTrainingWU) {
@@ -467,10 +466,11 @@ double s2[param->nOutput];  // Output delta from hidden layer to the output laye
                             /*can support multiple optimization algorithm*/
                             gradt = s1[jj] * Input[i][k];
                             gradSum1[jj][k] += gradt; // sum over the gradient over all the training samples in this batch
-                            if (optimization_type == "SGD"){
+                            //std::cout<<"Opt Type #1: "<<optimization_type<<"\n";
+                            if (strcmp(optimization_type, "SGD")){
                                 deltaWeight1[jj][k] = SGD(gradt, param->alpha1);                        
                              }   
-                            else if(optimization_type=="Momentum")
+                            else if(strcmp(optimization_type,"Momentum"))
                             {
                                 deltaWeight1[jj][k] = SGD(gradt, param->alpha1); // only add momentum once every batch                       
                                 if (batchSize % numTrain == 0)
@@ -480,7 +480,7 @@ double s2[param->nOutput];  // Output delta from hidden layer to the output laye
                                     gradSum1[jj][k] = 0;
                                 }
                             }
-                            else if(optimization_type=="Adagrad")
+                            else if(strcmp(optimization_type,"Adagrad"))
                             {
                                    deltaWeight1[jj][k] = Adagrad(gradt, param->alpha1, gradSquarePrev1[jj][k]);
                                    if (batchSize % numTrain == 0)
@@ -489,7 +489,7 @@ double s2[param->nOutput];  // Output delta from hidden layer to the output laye
                                       gradSum1[jj][k] = 0;
                                    }
                             }
-                            else if(optimization_type=="RMSprop")
+                            else if(strcmp(optimization_type,"RMSprop"))
                             {
                                 deltaWeight1[jj][k] = RMSprop(gradt, param->alpha1, gradSquarePrev1[jj][k]);
                                 if (batchSize % numTrain == 0){
@@ -497,7 +497,7 @@ double s2[param->nOutput];  // Output delta from hidden layer to the output laye
                                     gradSum1[jj][k] = 0;
                             }
                         }
-                            else if(optimization_type == "Adam")
+                            else if(strcmp(optimization_type,"Adam"))
                             {
                                 deltaWeight1[jj][k] = Adam(gradt, param->alpha1, 0, gradSquarePrev1[jj][k]); //only add momentum once
                                 if (batchSize % numTrain == 0){
@@ -507,7 +507,10 @@ double s2[param->nOutput];  // Output delta from hidden layer to the output laye
                                 gradSum1[jj][k] = 0;
                             } 
                         }
-                        else std::cout<<"please specify an optimization method" <<end;
+                        else{
+                            std::cout<<"Err #1: please specify an optimization method" <<end;
+                            exit(0);
+                        }
                     
                            /* tracking code */
                            /*
@@ -767,9 +770,10 @@ double s2[param->nOutput];  // Output delta from hidden layer to the output laye
 
                             gradt = s2[jj] * a1[k];
                             gradSum2[jj][k] += gradt; // sum over the gradient over all the training samples in this batch
-                         if (optimization_type == "SGD") 
+                            //std::cout<<"Opt Type #2: "<<optimization_type<<"\n";
+                         if (optimization_type == "SGD")
                             deltaWeight2[jj][k] = SGD(gradt, param->alpha2);                        
-                            else if(optimization_type=="Momentum")
+                            else if(strcmp(optimization_type,"Momentum"))
                                     {
                                         deltaWeight2[jj][k] = SGD(gradt, param->alpha2);                        
                                         if (batchSize % numTrain == 0){                                            
@@ -778,7 +782,7 @@ double s2[param->nOutput];  // Output delta from hidden layer to the output laye
                                             gradSum2[jj][k] = 0;
                                         }
                                     }
-                            else if(optimization_type=="Adagrad")
+                            else if(strcmp(optimization_type,"Adagrad"))
                                     {
                                         deltaWeight2[jj][k] = Adagrad(gradt, param->alpha2, gradSquarePrev2[jj][k]);
                                         if (batchSize % numTrain == 0){
@@ -786,7 +790,7 @@ double s2[param->nOutput];  // Output delta from hidden layer to the output laye
                                             gradSum2[jj][k] = 0;
                                         }
                                     }
-                            else if(optimization_type=="RMSprop")
+                            else if(strcmp(optimization_type,"RMSprop"))
                                     {
                                         deltaWeight2[jj][k] = RMSprop(gradt, param->alpha2, gradSquarePrev2[jj][k]);
                                         if (batchSize % numTrain == 0){
@@ -794,7 +798,7 @@ double s2[param->nOutput];  // Output delta from hidden layer to the output laye
                                             gradSum2[jj][k] = 0;
                                         }
                                     }
-                            else if(optimization_type == "Adam")
+                            else if(strcmp(optimization_type,"Adam"))
                                    {
                                         deltaWeight2[jj][k] = Adam(gradt, param->alpha2, 0, gradSquarePrev2[jj][k]);
 
@@ -805,7 +809,7 @@ double s2[param->nOutput];  // Output delta from hidden layer to the output laye
                                             gradSum2[jj][k] = 0;
                                         } 
                                   }
-                            else std::cout<<"please specify an optimization method" <<end;
+                            else std::cout<<"Err #2: please specify an optimization method" <<end;
 
                             // the gradSquarePrev and mementumPrev are updated inside the function
                             /*tracking code*/

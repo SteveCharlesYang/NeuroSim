@@ -1,41 +1,3 @@
-/*******************************************************************************
-* Copyright (c) 2015-2017
-* School of Electrical, Computer and Energy Engineering, Arizona State University
-* PI: Prof. Shimeng Yu
-* All rights reserved.
-*   
-* This source code is part of NeuroSim - a device-circuit-algorithm framework to benchmark 
-* neuro-inspired architectures with synaptic devices(e.g., SRAM and emerging non-volatile memory). 
-* Copyright of the model is maintained by the developers, and the model is distributed under 
-* the terms of the Creative Commons Attribution-NonCommercial 4.0 International Public License 
-* http://creativecommons.org/licenses/by-nc/4.0/legalcode.
-* The source code is free and you can redistribute and/or modify it
-* by providing that the following conditions are met:
-*   
-*  1) Redistributions of source code must retain the above copyright notice,
-*     this list of conditions and the following disclaimer. 
-*   
-*  2) Redistributions in binary form must reproduce the above copyright notice,
-*     this list of conditions and the following disclaimer in the documentation
-*     and/or other materials provided with the distribution.
-*   
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-* 
-* Developer list: 
-*   Pai-Yu Chen     Email: pchen72 at asu dot edu 
-*                     
-*   Xiaochen Peng   Email: xpeng15 at asu dot edu
-********************************************************************************/
-
 #include <cstdio>
 #include <iostream>
 #include <fstream>
@@ -44,6 +6,11 @@
 #include <stdlib.h>
 #include <random>
 #include <vector>
+
+#include "lib/cxxopts.hpp"
+#include "lib/utils.hpp"
+#include "lib/argparser.hpp"
+
 #include "Cell.h"
 #include "Array.h"
 #include "formula.h"
@@ -57,28 +24,68 @@
 
 using namespace std;
 
-int main() {
+int main(int argc, char** argv) {
+    cxxopts::ParseResult opt = initialize_options(argc, argv);
+
+    if (opt.count("help")) {
+        std::cout << options.help() << std::endl;
+        exit(0);
+    }
+
 	gen.seed(0);
-	
-	/* Load in MNIST data */
-	ReadTrainingDataFromFile("patch60000_train.txt", "label60000_train.txt");
-	ReadTestingDataFromFile("patch10000_test.txt", "label10000_test.txt");
 
-	/* Initialization of synaptic array from input to hidden layer */
-	//arrayIH->Initialization<IdealDevice>();
-	arrayIH->Initialization<RealDevice>();
-	//arrayIH->Initialization<MeasuredDevice>();
-	//arrayIH->Initialization<SRAM>(param->numWeightBit);
-	//arrayIH->Initialization<DigitalNVM>(param->numWeightBit,true); // true: consider refColumn
+	ReadTrainingDataFromFile(str2char(opt["trfp"].as<std::string>()), str2char(opt["trfl"].as<std::string>()));
+	ReadTestingDataFromFile(str2char(opt["tefp"].as<std::string>()), str2char(opt["tefl"].as<std::string>()));
 
-	
-	/* Initialization of synaptic array from hidden to output layer */
-	//arrayHO->Initialization<IdealDevice>();
-	arrayHO->Initialization<RealDevice>();
-	//arrayHO->Initialization<MeasuredDevice>();
-	//arrayHO->Initialization<SRAM>(param->numWeightBit);
-	//arrayHO->Initialization<DigitalNVM>(param->numWeightBit,true);
+    switch (DeviceTypeMap[opt["IHDevice"].as<std::string>()]){
+        case Device_Ideal: arrayIH->Initialization<IdealDevice>(1, false, opt, 1); break;
+        case Device_Real: arrayIH->Initialization<RealDevice>(1, false, opt, 1); break;
+        case Device_Measured: arrayIH->Initialization<MeasuredDevice>(1, false, opt, 1); break;
+        case Device_SRAM: arrayIH->Initialization<SRAM>(param->numWeightBit, false, opt, 1); break;
+        case Device_DigitalNVM: arrayIH->Initialization<DigitalNVM>(param->numWeightBit,true, opt, 1); break;
+    }
 
+    switch (DeviceTypeMap[opt["HODevice"].as<std::string>()]){
+        case Device_Ideal: arrayHO->Initialization<IdealDevice>(1, false, opt, 0); break;
+        case Device_Real: arrayHO->Initialization<RealDevice>(1, false, opt, 0); break;
+        case Device_Measured: arrayHO->Initialization<MeasuredDevice>(1, false, opt, 0); break;
+        case Device_SRAM: arrayHO->Initialization<SRAM>(param->numWeightBit, false, opt, 0); break;
+        case Device_DigitalNVM: arrayHO->Initialization<DigitalNVM>(param->numWeightBit,true, opt, 0); break;
+    }
+
+    param->numMnistTrainImages = opt["MNISTTrainImgs"].as<int>();
+    param->numMnistTestImages = opt["MNISTTestImgs"].as<int>();
+    param->numTrainImagesPerEpoch = opt["TrainImgEpoch"].as<int>();
+    param->totalNumEpochs = opt["totEpoch"].as<int>();
+    param->interNumEpochs = opt["intEpoch"].as<int>();
+    param->nInput = opt["nIn"].as<int>();
+    param->nHide = opt["nHide"].as<int>();
+    param->nOutput = opt["nOut"].as<int>();
+    param->alpha1 = opt["alp1"].as<double>();
+    param->alpha2 = opt["alp2"].as<double>();
+    param->maxWeight = opt["maxW"].as<double>();
+    param->minWeight = opt["minW"].as<double>();
+    param->optimization_type = str2char(opt["opt"].as<std::string>());
+    param->useHardwareInTrainingFF = opt["HWTrainFF"].as<bool>();
+    param->useHardwareInTrainingWU = opt["HWTrainWU"].as<bool>();
+    param->useHardwareInTraining = param->useHardwareInTrainingFF || param->useHardwareInTrainingWU;
+    param->useHardwareInTestingFF = opt["HWTestFF"].as<bool>();
+    param->numBitInput = opt["nBitInput"].as<int>();
+    param->numBitPartialSum = opt["nBitPartial"].as<int>();
+    param->pSumMaxHardware = pow(2, param->numBitPartialSum) - 1;
+    param->numInputLevel = pow(2, param->numBitInput);
+    param->numWeightBit = opt["nWBit"].as<int>();
+    param->BWthreshold = opt["BWthres"].as<double>();
+    param->Hthreshold = opt["Hthres"].as<double>();
+    param->numColMuxed = opt["nColMux"].as<int>();
+    param->numWriteColMuxed = opt["nWriteColMux"].as<int>();
+    param->writeEnergyReport = opt["writeEReport"].as<bool>();
+    param->NeuroSimDynamicPerformance = opt["SimDynPerf"].as<bool>();
+    param->relaxArrayCellHeight = opt["relaxArrCellH"].as<bool>();
+    param->relaxArrayCellWidth = opt["relaxArrCellW"].as<bool>();
+    param->arrayWireWidth = opt["arrWireW"].as<double>();
+    param->processNode = opt["node"].as<int>();
+    param->clkFreq = opt["clkfq"].as<double>();
 
 	/* Initialization of NeuroSim synaptic cores */
 	param->relaxArrayCellWidth = 0;
@@ -88,11 +95,11 @@ int main() {
 	/* Calculate synaptic core area */
 	NeuroSimSubArrayArea(subArrayIH);
 	NeuroSimSubArrayArea(subArrayHO);
-	
+
 	/* Calculate synaptic core standby leakage power */
 	NeuroSimSubArrayLeakagePower(subArrayIH);
 	NeuroSimSubArrayLeakagePower(subArrayHO);
-	
+
 	/* Initialize the neuron peripheries */
 	NeuroSimNeuronInitialize(subArrayIH, inputParameterIH, techIH, cellIH, adderIH, muxIH, muxDecoderIH, dffIH, subtractorIH);
 	NeuroSimNeuronInitialize(subArrayHO, inputParameterHO, techHO, cellHO, adderHO, muxHO, muxDecoderHO, dffHO, subtractorHO);
@@ -104,7 +111,7 @@ int main() {
 	double heightNeuronHO, widthNeuronHO;
 	NeuroSimNeuronArea(subArrayHO, adderHO, muxHO, muxDecoderHO, dffHO, subtractorHO, &heightNeuronHO, &widthNeuronHO);
 	double leakageNeuronHO = NeuroSimNeuronLeakagePower(subArrayHO, adderHO, muxHO, muxDecoderHO, dffHO, subtractorHO);
-	
+
 	/* Print the area of synaptic core and neuron peripheries */
 	double totalSubArrayArea = subArrayIH->usedArea + subArrayHO->usedArea;
 	double totalNeuronAreaIH = adderIH.area + muxIH.area + muxDecoderIH.area + dffIH.area + subtractorIH.area;
@@ -120,19 +127,17 @@ int main() {
 	printf("Leakage power of NeuronHO is : %.4e W\n", leakageNeuronHO);
 	printf("Total leakage power of subArray is : %.4e W\n", subArrayIH->leakage + subArrayHO->leakage);
 	printf("Total leakage power of Neuron is : %.4e W\n", leakageNeuronIH + leakageNeuronHO);
-	
 	/* Initialize weights and map weights to conductances for hardware implementation */
 	WeightInitialize();
 	if (param->useHardwareInTraining) { WeightToConductance(); }
-
 	srand(0);	// Pseudorandom number seed
 	
 	ofstream mywriteoutfile;
-	mywriteoutfile.open("my_log.csv");                                                                                                            
-	
+	mywriteoutfile.open("my_log.csv");
 	for (int i=1; i<=param->totalNumEpochs/param->interNumEpochs; i++) {
         //cout << "Training Epoch : " << i << endl;
-		Train(param->numTrainImagesPerEpoch, param->interNumEpochs,param->optimization_type);
+        char* opt_type = str2char(param->optimization_type);
+		Train(param->numTrainImagesPerEpoch, param->interNumEpochs,opt_type);
 		if (!param->useHardwareInTraining && param->useHardwareInTestingFF) { WeightToConductance(); }
 		Validate();
 		mywriteoutfile << i*param->interNumEpochs << ", " << (double)correct/param->numMnistTestImages*100 << endl;
